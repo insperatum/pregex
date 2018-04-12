@@ -11,7 +11,8 @@ Usage:
 ```
 import pregex as pre
 r = pre.create("\\d+\\l+\\u+\\s")
-score = r.match("123abcABC ")
+samp = r.sample() //'3gclxbZ\t'
+score = r.match("123abcABC ") //-34.486418601378595
 ```
 
 # Todo:
