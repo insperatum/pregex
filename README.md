@@ -16,4 +16,9 @@ score = r.match("123abcABC ") //-34.486418601378595
 ```
 
 # Todo:
-- [ ] Add marginal likelihood (subtlety to avoid infinite recursion in KleeneStar.consume)
+- [ ] use separate bracket types for each function?
+- [ ] 'sample' and 'marginalise' modes.
+Note -- for this, KleeneStar needs to be adapted to get correct score for fo?* -> foo.
+First calculate probability q=P(o?->ε), then multiply all partialmatches by 1/[1-q(1-p))]
+- [ ] Should still be able to do dynamic programming to combine partialMatches that have different states, so long as the difference in state doesn't affect the continuation
+- [ ] Replace namedtuples with attrs
