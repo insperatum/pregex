@@ -16,7 +16,7 @@ CLOSE = "BRACKET_CLOSE"
 
 class Pregex(namedtuple("Pregex", ["type", "arg"])):
 	def __new__(cls, arg):
-		return super().__new__(cls, cls.__name__, arg)
+		return super(Pregex, cls).__new__(cls, cls.__name__, arg)
 
 	def __getnewargs__(self):
 		return (self.arg,)
@@ -165,7 +165,7 @@ class String(Pregex):
 
 class Concat(Pregex):
 	def __new__(cls, values):
-		return super().__new__(cls, tuple(values))
+		return super(Concat, cls).__new__(cls, tuple(values))
 
 	def __getnewargs__(self):
 		return (self.values,)
@@ -195,7 +195,7 @@ class Alt(Pregex):
 	def __new__(cls, values, ps=None):
 		if ps is None:
 			ps = (1/len(values),) * len(values)
-		return super().__new__(cls, (tuple(ps), tuple(values)))
+		return super(Alt, cls).__new__(cls, (tuple(ps), tuple(values)))
 
 	def __getnewargs__(self):
 		return (self.values, self.ps)
@@ -255,7 +255,7 @@ class NonEmpty(Pregex):
 
 class KleeneStar(Pregex):
 	def __new__(cls, arg, p=0.5):
-		return super().__new__(cls, (p, arg))
+		return super(KleeneStar, cls).__new__(cls, (p, arg))
 
 	def __getnewargs__(self):
 		return self.val, self.p
@@ -303,7 +303,7 @@ class KleeneStar(Pregex):
 
 class Plus(Pregex):
 	def __new__(cls, arg, p=0.5):
-		return super().__new__(cls, (p, arg))
+		return super(Plus, cls).__new__(cls, (p, arg))
 
 	def __getnewargs__(self):
 		return self.arg[1], self.arg[0]
@@ -344,7 +344,7 @@ class Plus(Pregex):
 
 class Maybe(Pregex):
 	def __new__(cls, arg, p=0.5):
-		return super().__new__(cls, (p, arg))
+		return super(Maybe, cls).__new__(cls, (p, arg))
 
 	def __getnewargs__(self):
 		return self.arg[1], self.arg[0]
