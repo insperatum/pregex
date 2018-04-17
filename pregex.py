@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from __future__ import division, print_function
 from scipy.stats import geom
 from collections import namedtuple
 
@@ -70,13 +71,6 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
 		"""
 		:param bool mergeState: if True, only retain the highest scoring state for each continuation 
 		"""
-		try:
-			hash(self)
-		except TypeError:
-			print(self)
-			print(self.values)
-			print(self.ps)
-			hash(self)
 		initialState = state
 		partialsAt = [[] for i in range(len(string)+1)]
 		finalMatches = [[] for i in range(len(string)+1)]
@@ -194,7 +188,7 @@ class Concat(Pregex):
 class Alt(Pregex):
 	def __new__(cls, values, ps=None):
 		if ps is None:
-			ps = (1./len(values),) * len(values)
+			ps = (1/len(values),) * len(values)
 		return super(Alt, cls).__new__(cls, (tuple(ps), tuple(values)))
 
 	def __getnewargs__(self):
@@ -234,12 +228,7 @@ class Alt(Pregex):
 	def consume(self, s, state=None):
 		for p, value in zip(self.ps, self.values):
 			for partialMatch in value.consume(s, state):
-				try:
-					extraScore = math.log(p)
-				except ValueError as e:
-					print self.ps
-					print p
-					raise e
+				extraScore = math.log(p)
 				yield partialMatch._replace(score=partialMatch.score+extraScore, reported_score=partialMatch.reported_score+extraScore)
 
 class NonEmpty(Pregex):
