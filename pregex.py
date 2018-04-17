@@ -194,7 +194,7 @@ class Concat(Pregex):
 class Alt(Pregex):
 	def __new__(cls, values, ps=None):
 		if ps is None:
-			ps = (1/len(values),) * len(values)
+			ps = (1./len(values),) * len(values)
 		return super(Alt, cls).__new__(cls, (tuple(ps), tuple(values)))
 
 	def __getnewargs__(self):
@@ -234,7 +234,12 @@ class Alt(Pregex):
 	def consume(self, s, state=None):
 		for p, value in zip(self.ps, self.values):
 			for partialMatch in value.consume(s, state):
-				extraScore = math.log(p)
+				try:
+					extraScore = math.log(p)
+				except ValueError as e:
+					print self.ps
+					print p
+					raise e
 				yield partialMatch._replace(score=partialMatch.score+extraScore, reported_score=partialMatch.reported_score+extraScore)
 
 class NonEmpty(Pregex):
