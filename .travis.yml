@@ -15,7 +15,7 @@ install:
     fi
   - bash miniconda.sh -b -p $HOME/miniconda
   - export PATH="$HOME/miniconda/bin:$PATH"
-
+  - conda install -y anaconda-project
 
 script:
   # Your test script goes here
