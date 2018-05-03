@@ -6,7 +6,7 @@ from collections import namedtuple
 
 import random
 import math
-from string import ascii_letters, digits, punctuation, ascii_lowercase, ascii_uppercase, whitespace, printable
+from string import ascii_letters, digits, ascii_lowercase, ascii_uppercase, whitespace, printable
 
 import numpy as np
 
@@ -112,7 +112,8 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
 			if matches:
 				score, _, state, reported_score = matches[0]
 			else:
-				score, state, reported_score = float("-inf"), None, float("-inf")
+				state = None
+				reported_score = float("-inf")
 
 			if initialState is None:
 				return reported_score
@@ -125,26 +126,43 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
 			return getOutput(finalMatches[-1])
 
 class CharacterClass(Pregex):
+	def __new__(cls, values, name=None):
+		return super(CharacterClass, cls).__new__(cls, (tuple(values), name))
+
+	def __getnewargs__(self):
+		return (self.values, self.name)
+
+	@property
+	def values(self):
+		return self.arg[0]
+
+	@property
+	def name(self):
+		return self.arg[1]
+
 	def __repr__(self):
-		return "[" + self.arg + "]"
+		if self.name is not None:
+			return self.name
+		else:
+			return "[" + "".join(self.values) + "]"
 
 	def flatten(self, char_map={}, escape_strings=False):
 		return [char_map.get(self, self)]
 
 	def sample(self, state=None):
-		return random.choice(self.arg)
+		return random.choice(self.values)
 
 	def consume(self, s, state=None):
-		if len(s)>=1 and s[:1] in self.arg:
-			score = -math.log(len(self.arg))
+		if len(s)>=1 and s[:1] in self.values:
+			score = -math.log(len(self.values))
 			yield PartialMatch(numCharacters=1, score=score, reported_score=score, continuation=None, state=state)
 
-dot = CharacterClass(printable[:-4]) #Don't match newline characters
-d = CharacterClass(digits)
-s = CharacterClass(whitespace)
-w = CharacterClass(ascii_letters + digits)
-l = CharacterClass(ascii_lowercase)
-u = CharacterClass(ascii_uppercase)
+dot = CharacterClass(printable[:-4], name=".") #Don't match newline characters
+d = CharacterClass(digits, name="\\d")
+s = CharacterClass(whitespace, name="\\s")
+w = CharacterClass(ascii_letters + digits, name="\\w")
+l = CharacterClass(ascii_lowercase, name="\\l")
+u = CharacterClass(ascii_uppercase, name="\\u")
 
 class String(Pregex):
 	def flatten(self, char_map={}, escape_strings=False):

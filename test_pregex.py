@@ -1,3 +1,4 @@
+import random
 import pregex as pre
 import math
 
@@ -93,9 +94,12 @@ assert(score > float("-inf"))
 import pickle
 import os
 r = pre.create("\\d*|foo?|.+")
+print(r, repr(r))
+assert(r==r)
 with open('regex_Test.p', 'wb') as file:
 	pickle.dump(r, file)
 with open('regex_Test.p', 'rb') as file:
-	print(r)
-	assert(r == pickle.load(file))
+	r2 = pickle.load(file)
+	print(r2, repr(r2))
+	assert(r == r2)
 os.remove("regex_Test.p")
