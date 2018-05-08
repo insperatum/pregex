@@ -25,7 +25,7 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
 	def __repr__(self):
 		return str("(" + type(self).__name__ + " " + repr(self.arg) + ")")
 
-	def str(self, f=str):
+	def str(self, f=str, escape_strings=True):
 		char_map = {
 			dot: ".",
 			d: "\\d",
@@ -40,7 +40,7 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
 			OPEN: "(",
 			CLOSE: ")"
 		}
-		flat = flatten(self, char_map=char_map, escape_strings=True)
+		flat = flatten(self, char_map=char_map, escape_strings=escape_strings)
 		return "".join([x if type(x) is str else repr(x) if issubclass(type(x), Pregex) else f(x) for x in flat])
 
 	def __str__(self):
