@@ -126,19 +126,24 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
 			return getOutput(finalMatches[-1])
 
 class CharacterClass(Pregex):
-	def __new__(cls, values, name=None):
-		return super(CharacterClass, cls).__new__(cls, (tuple(values), name))
+	def __new__(cls, values, ps=None, name=None):
+		if ps is None: ps = [1/len(values) for value in values]
+		return super(CharacterClass, cls).__new__(cls, (tuple(values), tuple(ps), name))
 
 	def __getnewargs__(self):
-		return (self.values, self.name)
+		return (self.values, self.ps, self.name)
 
 	@property
 	def values(self):
 		return self.arg[0]
 
 	@property
-	def name(self):
+	def ps(self):
 		return self.arg[1]
+
+	@property
+	def name(self):
+		return self.arg[2]
 
 	def __repr__(self):
 		if self.name is not None:
@@ -150,11 +155,11 @@ class CharacterClass(Pregex):
 		return [char_map.get(self, self)]
 
 	def sample(self, state=None):
-		return random.choice(self.values)
+		return np.random.choice(self.values, p=self.ps)
 
 	def consume(self, s, state=None):
 		if len(s)>=1 and s[:1] in self.values:
-			score = -math.log(len(self.values))
+			score = math.log(self.ps[self.values.index(s[:1])])
 			yield PartialMatch(numCharacters=1, score=score, reported_score=score, continuation=None, state=state)
 
 dot = CharacterClass(printable[:-4], name=".") #Don't match newline characters
