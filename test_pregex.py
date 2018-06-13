@@ -34,6 +34,13 @@ for (string, regex, matches) in test_cases:
 	print("Matching", string, r)
 	assert(matches == (r.match(string)>float("-inf")))
 
+print("Testing natural frequencies")
+print("hello")
+assert(pre.create("\l*", natural_frequencies=True).match("hello") > pre.create("\l*").match("hello"))
+print("jjjj")
+assert(pre.create("\l*", natural_frequencies=True).match("jjjj") < pre.create("\l*").match("jjjj"))
+
+
 
 class Foobar():
 	def sample(self, state=None):

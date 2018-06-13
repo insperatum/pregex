@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function
 from scipy.stats import geom
-from collections import namedtuple
+from collections import namedtuple, Counter
 
 import random
 import math
@@ -162,12 +162,25 @@ class CharacterClass(Pregex):
 			score = math.log(self.ps[self.values.index(s[:1])])
 			yield PartialMatch(numCharacters=1, score=score, reported_score=score, continuation=None, state=state)
 
+#Uniform Frequences
 dot = CharacterClass(printable[:-4], name=".") #Don't match newline characters
 d = CharacterClass(digits, name="\\d")
 s = CharacterClass(whitespace, name="\\s")
 w = CharacterClass(ascii_letters + digits, name="\\w")
 l = CharacterClass(ascii_lowercase, name="\\l")
 u = CharacterClass(ascii_uppercase, name="\\u")
+
+#Empirical Frequencies from Reuters articles https://trec.nist.gov/data/reuters/reuters.html
+_emp = Counter({' ': 2643759, 'e': 1386846, 't': 1012840, 'a': 966445, 'n': 868336, 'i': 864695, 'o': 854979, 'r': 827118, 's': 818629, 'l': 507744, 'd': 503130, 'h': 413245, 'c': 394475, '\n': 328005, 'u': 317870, 'm': 286203, 'p': 273927, 'f': 248498, 'g': 202023, '.': 174421, 'y': 171873, 'b': 163239, 'w': 150923, ',': 136229, 'v': 123365, '0': 93385, 'k': 78030, '1': 77905, 'T': 52995, 'S': 48747, 'C': 47133, '2': 43486, 'R': 40720, '8': 40276, '5': 39868, 'A': 39088, '9': 38532, 'x': 36389, '3': 34498, 'I': 32991, '-': 32765, '6': 30291, 'E': 29527, '4': 29007, '7': 28783, 'M': 28612, 'B': 27432, '"': 24856, "'": 23790, 'P': 21916, 'U': 21007, 'N': 20130, 'F': 19253, 'D': 17241, 'q': 15912, 'L': 15848, 'G': 14689, 'J': 13907, 'H': 13809, 'O': 12954, 'W': 12698, 'j': 9744, 'z': 9092, '/': 8198, '<': 6959, '>': 6949, 'K': 6008, ')': 5229, '(': 5219, 'V': 4033, 'Y': 3975, ':': 1899, 'Q': 1578, 'Z': 1360, 'X': 1037, ';': 117, '?': 73, '\x7f': 49, '^': 35, '&': 32, '+': 24, '[': 11, ']': 10, '$': 8, '!': 8, '*': 7, '=': 4, '~': 3, '_': 2, '\t': 2, '@': 1, '\x1b': 1, '{': 1, '\xfc': 1, '\x1e': 1, '\x05': 1})
+def _natural_probs(chars):
+	total = sum(_emp[x] for x in chars)
+	return [_emp[x]/total for x in chars]
+dot_natural = CharacterClass(printable[:-4], name=".", ps=_natural_probs(printable[:-4]))
+d_natural = CharacterClass(digits, name="\\d", ps=_natural_probs(digits))
+s_natural = CharacterClass(whitespace, name="\\s", ps=_natural_probs(whitespace))
+w_natural = CharacterClass(ascii_letters + digits, name="\\w", ps=_natural_probs(ascii_letters+digits))
+l_natural = CharacterClass(ascii_lowercase, name="\\l", ps=_natural_probs(ascii_lowercase))
+u_natural = CharacterClass(ascii_uppercase, name="\\u", ps=_natural_probs(ascii_uppercase))
 
 class String(Pregex):
 	def flatten(self, char_map={}, escape_strings=False):
@@ -415,7 +428,7 @@ def flatten(obj, char_map, escape_strings):
 class ParseException(Exception):
 	pass
 
-def create(seq, lookup=None):
+def create(seq, lookup=None, natural_frequencies=False):
 	"""
 	Seq is a string or a list
 	"""
@@ -447,12 +460,12 @@ def create(seq, lookup=None):
 			elif seq[:2] == "\\.": return String("."), seq[2:]
 			elif seq[:2] == "\\\\": return String("\\"), seq[2:]
 
-			elif seq[:2] == "\\d": return d, seq[2:]
-			elif seq[:2] == "\\s": return s, seq[2:]
-			elif seq[:2] == "\\w": return w, seq[2:]
-			elif seq[:2] == "\\l": return l, seq[2:]
-			elif seq[:2] == "\\u": return u, seq[2:]
-			elif seq[:1] == ".":  return dot, seq[1:]
+			elif seq[:2] == "\\d": return d_natural if natural_frequencies else d, seq[2:]
+			elif seq[:2] == "\\s": return s_natural if natural_frequencies else s, seq[2:]
+			elif seq[:2] == "\\w": return w_natural if natural_frequencies else w, seq[2:]
+			elif seq[:2] == "\\l": return l_natural if natural_frequencies else l, seq[2:]
+			elif seq[:2] == "\\u": return u_natural if natural_frequencies else u, seq[2:]
+			elif seq[:1] == ".":  return dot_natural if natural_frequencies else dot, seq[1:]
 
 		elif head(seq) == OPEN:
 				if len(seq)<=1: raise ParseException() #Lookahead
