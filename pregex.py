@@ -227,9 +227,17 @@ class Concat(Pregex):
 	def consume(self, s, state=None):
 		for partialMatch in self.values[0].consume(s, state):
 			if partialMatch.continuation is None:
-				continuation = None if len(self.values)==1 else Concat(self.values[1:])
+				if len(self.values)==1:
+					continuation = None
+				elif len(self.values)==2:
+					continuation = self.values[1]
+				else:
+					continuation = Concat(self.values[1:])
 			else:
-				continuation = partialMatch.continuation if len(self.values)==0 else Concat((partialMatch.continuation,) + self.values[1:])
+				if len(self.values)==1:
+					continuation = partialMatch.continuation
+				else:
+					continuation = Concat((partialMatch.continuation,) + self.values[1:])
 			yield partialMatch._replace(continuation=continuation)
 
 class Alt(Pregex):
@@ -559,6 +567,5 @@ class Wrapper(Pregex):
 			matchScore, newState = self.arg.match(s[:i], state)
 			if matchScore > float("-inf"):
 				yield PartialMatch(numCharacters=i, score=matchScore, reported_score=matchScore, continuation=None, state=newState)
-
 
 

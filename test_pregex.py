@@ -19,6 +19,7 @@ test_cases = [
 	("foo", "fo|a*", False),
 	("foo", "f|ao|ao|a", True),
 	("f"+"o"*50, "f"+"o*"*10, True),
+	("f"+"o"*50, "fo" + "*"*10, True),
 	("foo", "fo?+", True),
 	("foo", "fo**", True),
 	("(foo)", "\\(foo\\)", True),
