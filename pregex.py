@@ -126,17 +126,20 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
 			return getOutput(finalMatches[-1])
 
 class CharacterClass(Pregex):
-	def __new__(cls, values, ps=None, name=None):
-		if ps is None:
-			ps = [1/len(values) for value in values]
-		else: 
-			#do normalization
-			assert len(ps) == len(values)
-			ps = [p/sum(ps) for p in ps]
+	def __new__(cls, values, ps=None, name=None, normalised_ps=None):
+		if normalised_ps is None:
+			if ps is None:
+				ps = [1/len(values) for value in values]
+			else:
+				#do normalization
+				assert len(ps) == len(values)
+				ps = [p/sum(ps) for p in ps]
+		else:
+			ps = normalised_ps
 		return super(CharacterClass, cls).__new__(cls, (tuple(values), tuple(ps), name))
 
 	def __getnewargs__(self):
-		return (self.values, self.ps, self.name)
+		return (self.values, None, self.name, self.ps)
 
 	@property
 	def values(self):
