@@ -7,6 +7,8 @@ from collections import namedtuple, Counter
 import random
 import math
 from string import ascii_letters, digits, ascii_lowercase, ascii_uppercase, whitespace, printable
+printable = printable[:-4]
+whitespace = [x for x in whitespace if x in printable] 
 
 import numpy as np
 
@@ -171,7 +173,7 @@ class CharacterClass(Pregex):
 			yield PartialMatch(numCharacters=1, score=score, reported_score=score, continuation=None, state=state)
 
 #Uniform Frequences
-dot = CharacterClass(printable[:-4], name=".") #Don't match newline characters
+dot = CharacterClass(printable, name=".") #Don't match newline characters
 d = CharacterClass(digits, name="\\d")
 s = CharacterClass(whitespace, name="\\s")
 w = CharacterClass(ascii_letters + digits, name="\\w")
@@ -183,7 +185,7 @@ _emp = Counter({' ': 2643759, 'e': 1386846, 't': 1012840, 'a': 966445, 'n': 8683
 def _natural_probs(chars):
 	total = sum(_emp[x] for x in chars)
 	return [_emp[x]/total for x in chars]
-dot_natural = CharacterClass(printable[:-4], name=".", ps=_natural_probs(printable[:-4]))
+dot_natural = CharacterClass(printable, name=".", ps=_natural_probs(printable))
 d_natural = CharacterClass(digits, name="\\d", ps=_natural_probs(digits))
 s_natural = CharacterClass(whitespace, name="\\s", ps=_natural_probs(whitespace))
 w_natural = CharacterClass(ascii_letters + digits, name="\\w", ps=_natural_probs(ascii_letters+digits))
