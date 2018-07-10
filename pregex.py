@@ -3,7 +3,8 @@
 from __future__ import division, print_function
 from scipy.stats import geom
 from collections import namedtuple, Counter
-from queue import PriorityQueue
+try: from queue import PriorityQueue
+except ImportError: from Queue import PriorityQueue
 
 import random
 import math

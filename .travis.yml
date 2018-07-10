@@ -19,4 +19,5 @@ install:
 
 script:
   # Your test script goes here
+  - anaconda-project run python --version
   - anaconda-project run python test_pregex.py 
