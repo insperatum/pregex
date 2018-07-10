@@ -17,7 +17,7 @@ score = r.match("123abcABC ") //-34.486418601378595
 ```
 
 # Todo:
-- [ ] Compare with Dijkstra's algorithm for MAP, maybe it's faster?
+- [x] Compare with Dijkstra's algorithm for MAP, maybe it's faster?
 - [ ] Make differentiable character class
 - [ ] use separate bracket types for each function?
 - [ ] 'sample' and 'marginalise' modes.

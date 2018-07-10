@@ -3,6 +3,7 @@
 from __future__ import division, print_function
 from scipy.stats import geom
 from collections import namedtuple, Counter
+from queue import PriorityQueue
 
 import random
 import math
@@ -72,6 +73,66 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
         """
         return []
 
+# Viterbi-style
+#
+#    def match(self, string, state=None, mergeState=True, returnPartials=False):
+#        """
+#        :param bool mergeState: if True, only retain the highest scoring state for each continuation 
+#        """
+#        initialState = state
+#        partialsAt = [[] for i in range(len(string)+1)]
+#        finalMatches = [[] for i in range(len(string)+1)]
+#        partialsAt[0] = [(0, self, initialState, 0)]
+#        # partialsAt[num characters consumed] = [(score, continuation, state, reported_score), ...]
+#        
+#        def merge(partials):
+#            #partials: [(score, continuation, state), ...]
+#            best = {} # best: continuation -> (score, continuation, state, reported_score)
+#            for x in partials:
+#                key = x[1] if mergeState else x[1:]
+#                x_best = best.get(key, None)
+#                if x_best is None or x_best[0] < x[0]:
+#                    best[key] = x
+#            return list(best.values())
+#        
+#        for i in range(len(string)+1):
+#            #Merge to find MAP
+#            partialsAt[i] = merge(partialsAt[i])
+#            #Match some characters
+#            remainder = string[i:]
+#            while partialsAt[i]:
+#                score, continuation, state, reported_score = partialsAt[i].pop()
+#                if continuation is None:
+#                    finalMatches[i].append((score, continuation, state, reported_score))
+#                    continue
+#                for remainderMatch in continuation.consume(remainder, state):
+#                    j = i + remainderMatch.numCharacters
+#                    if i==j and continuation == remainderMatch.continuation and state == remainderMatch.state:
+#                        raise Exception()
+#                    else:
+#                        partialsAt[j].append((score + remainderMatch.score, remainderMatch.continuation, remainderMatch.state, reported_score + remainderMatch.reported_score))
+#
+#        def getOutput(matches):
+#            matches = merge(matches)
+#            if matches:
+#                score, _, state, reported_score = matches[0]
+#            else:
+#                state = None
+#                reported_score = float("-inf")
+#
+#            if initialState is None:
+#                return reported_score
+#            else:
+#                return reported_score, state
+#
+#        if returnPartials:
+#            return [(numCharacters, getOutput(finalMatches[numCharacters])) for numCharacters in range(len(finalMatches)) if finalMatches[numCharacters]]
+#        else:
+#            return getOutput(finalMatches[-1])
+#
+
+# Dijkstra-style
+
     def match(self, string, state=None, mergeState=True, returnPartials=False):
         """
         :param bool mergeState: if True, only retain the highest scoring state for each continuation 
@@ -79,40 +140,39 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
         initialState = state
         partialsAt = [[] for i in range(len(string)+1)]
         finalMatches = [[] for i in range(len(string)+1)]
-        partialsAt[0] = [(0, self, initialState, 0)]
-        # partialsAt[num characters consumed] = [(score, continuation, state, reported_score), ...]
+        Node = namedtuple("Node", ("numCharacters", "continuation", "state"))
+        start = PartialMatch(0, 0, 0, self, state)
+        visited = {Node(0, self, state)} 
+        queue = PriorityQueue()
+        queue.put((0, start)) #Priority 0
         
-        def merge(partials):
-            #partials: [(score, continuation, state), ...]
-            best = {} # best: continuation -> (score, continuation, state, reported_score)
-            for x in partials:
-                key = x[1] if mergeState else x[1:]
-                x_best = best.get(key, None)
-                if x_best is None or x_best[0] < x[0]:
-                    best[key] = x
-            return list(best.values())
-        
-        for i in range(len(string)+1):
-            #Merge to find MAP
-            partialsAt[i] = merge(partialsAt[i])
-            #Match some characters
-            remainder = string[i:]
-            while partialsAt[i]:
-                score, continuation, state, reported_score = partialsAt[i].pop()
-                if continuation is None:
-                    finalMatches[i].append((score, continuation, state, reported_score))
-                    continue
-                for remainderMatch in continuation.consume(remainder, state):
-                    j = i + remainderMatch.numCharacters
-                    if i==j and continuation == remainderMatch.continuation and state == remainderMatch.state:
-                        raise Exception()
+        solution = None
+        while not queue.empty() and solution is None:
+            priority, current = queue.get()
+            remainder = string[current.numCharacters:]
+            for remainderMatch in current.continuation.consume(remainder, current.state):
+                assert not (remainderMatch.numCharacters==0 and current.continuation==remainderMatch.continuation and current.state==remainderMatch.state)
+                numCharacters = current.numCharacters + remainderMatch.numCharacters
+                newNode = Node(numCharacters, remainderMatch.continuation, remainderMatch.state)
+                if newNode not in visited:
+                    visited.add(newNode)
+                    newMatch = PartialMatch(
+                        numCharacters,
+                        current.score + remainderMatch.score,
+                        current.reported_score + remainderMatch.reported_score,
+                        remainderMatch.continuation,
+                        remainderMatch.state)
+                    if newMatch.continuation is None:
+                        if newMatch.numCharacters == len(string):
+                            solution = newMatch
+                            break
                     else:
-                        partialsAt[j].append((score + remainderMatch.score, remainderMatch.continuation, remainderMatch.state, reported_score + remainderMatch.reported_score))
+                        queue.put((-remainderMatch.score, newMatch))
 
-        def getOutput(matches):
-            matches = merge(matches)
-            if matches:
-                score, _, state, reported_score = matches[0]
+        def getOutput(match):
+            if match is not None:
+                state = match.state
+                reported_score = match.reported_score
             else:
                 state = None
                 reported_score = float("-inf")
@@ -123,9 +183,10 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
                 return reported_score, state
 
         if returnPartials:
-            return [(numCharacters, getOutput(finalMatches[numCharacters])) for numCharacters in range(len(finalMatches)) if finalMatches[numCharacters]]
+            raise NotImplementedError
+#            return [(numCharacters, getOutput(finalMatches[numCharacters])) for numCharacters in range(len(finalMatches)) if finalMatches[numCharacters]]
         else:
-            return getOutput(finalMatches[-1])
+            return getOutput(solution)
 
 class CharacterClass(Pregex):
     def __new__(cls, values, ps=None, name=None, normalised_ps=None):
