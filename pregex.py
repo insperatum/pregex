@@ -74,6 +74,12 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
         """
         return []
 
+    def map(self, f):
+        """
+        applies f to all child regexes, and returns the result
+        """
+        raise NotImplementedError()
+
 # Viterbi-style
 #
 #    def match(self, string, state=None, mergeState=True, returnPartials=False):
@@ -234,6 +240,8 @@ class CharacterClass(Pregex):
             score = math.log(self.ps[self.values.index(s[:1])])
             yield PartialMatch(numCharacters=1, score=score, reported_score=score, continuation=None, state=state)
 
+    def map(self, f): return self
+
 #Uniform Frequences
 dot = CharacterClass(printable, name=".") #Don't match newline characters
 d = CharacterClass(digits, name="\\d")
@@ -260,6 +268,7 @@ class Named(Pregex):
     def consume(self, s, state=None): return self.arg[1].consume(s, state)
     def leafNodes(self): return self.arg[1].leafNodes()
     def flatten(self, char_map={}, escape_strings=False): return [self.arg[0]]
+    def map(self, f): return Named(self.arg[0], f(self.arg[1]))
 
 class String(Pregex):
     def flatten(self, char_map={}, escape_strings=False):
@@ -274,6 +283,8 @@ class String(Pregex):
     def consume(self, s, state=None):
         if s[:len(self.arg)]==self.arg:
             yield PartialMatch(numCharacters=len(self.arg), score=0, reported_score=0, continuation=None, state=state)
+
+    def map(self, f): return self
 
 class Concat(Pregex):
     def __new__(cls, values):
@@ -310,6 +321,8 @@ class Concat(Pregex):
                 else:
                     continuation = Concat((partialMatch.continuation,) + self.values[1:])
             yield partialMatch._replace(continuation=continuation)
+
+    def map(self, f): return Concat([f(v) for v in self.values])
 
 class Alt(Pregex):
     def __new__(cls, values, ps=None):
@@ -356,6 +369,8 @@ class Alt(Pregex):
             for partialMatch in value.consume(s, state):
                 extraScore = math.log(p)
                 yield partialMatch._replace(score=partialMatch.score+extraScore, reported_score=partialMatch.reported_score+extraScore)
+
+    def map(self, f): return Alt([f(v) for v in self.values], self.ps)
 
 class NonEmpty(Pregex):
     """
@@ -420,6 +435,8 @@ class KleeneStar(Pregex):
             extraScore = math.log(1-self.p) 
             yield partialMatch._replace(score=partialMatch.score+extraScore, reported_score=partialMatch.reported_score+extraScore, continuation=continuation)
 
+    def map(self, f): return KleeneStar(f(self.val), self.p)
+
 
 class Plus(Pregex):
     def __new__(cls, arg, p=0.5):
@@ -461,6 +478,8 @@ class Plus(Pregex):
 
             yield partialMatch._replace(continuation=continuation)    
 
+    def map(self, f): return Plus(f(self.val), self.p)
+
 
 class Maybe(Pregex):
     def __new__(cls, arg, p=0.5):
@@ -500,6 +519,8 @@ class Maybe(Pregex):
         for partialMatch in self.val.consume(s, state):
             extraScore = math.log(self.p)
             yield partialMatch._replace(score=partialMatch.score+extraScore, reported_score=partialMatch.reported_score+extraScore)
+
+    def map(self, f): return Maybe(f(self.val), self.p)
 
 
 # ------------------------------------
