@@ -8,6 +8,10 @@ except ImportError: from Queue import PriorityQueue
 
 import random
 import math
+try: import torch
+except ImportError: pass
+def log(x): return x.log() if torch and torch.is_tensor(x) else math.log(x)
+
 from string import ascii_letters, digits, ascii_lowercase, ascii_uppercase, whitespace, printable
 printable = printable[:-4]
 whitespace = [x for x in whitespace if x in printable] 
@@ -151,8 +155,8 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
         :param bool mergeState: if True, only retain the highest scoring state for each continuation 
         """
         initialState = state
-        partialsAt = [[] for i in range(len(string)+1)]
-        finalMatches = [[] for i in range(len(string)+1)]
+        #partialsAt = [[] for i in range(len(string)+1)]
+        #finalMatches = [[] for i in range(len(string)+1)]
         Node = namedtuple("Node", ("numCharacters", "continuation", "state"))
         start = PartialMatch(0, 0, 0, self, state)
         visited = {Node(0, self, state)} 
@@ -209,10 +213,12 @@ class CharacterClass(Pregex):
             else:
                 #do normalization
                 assert len(ps) == len(values)
-                ps = [p/sum(ps) for p in ps]
+                if torch and torch.is_tensor(ps): ps = ps / ps.sum()
+                else: ps = [p/sum(ps) for p in ps]
         else:
             ps = normalised_ps
-        return super(CharacterClass, cls).__new__(cls, (tuple(values), tuple(ps), name))
+        if type(ps) is list: ps = tuple(ps)
+        return super(CharacterClass, cls).__new__(cls, (tuple(values), ps, name))
 
     def __getnewargs__(self):
         return (self.values, None, self.name, self.ps)
@@ -243,7 +249,7 @@ class CharacterClass(Pregex):
 
     def consume(self, s, state=None):
         if len(s)>=1 and s[:1] in self.values:
-            score = math.log(self.ps[self.values.index(s[:1])])
+            score = log(self.ps[self.values.index(s[:1])])
             yield PartialMatch(numCharacters=1, score=score, reported_score=score, continuation=None, state=state)
 
     def map(self, f): return self
@@ -401,7 +407,7 @@ class Alt(Pregex):
     def consume(self, s, state=None):
         for p, value in zip(self.ps, self.values):
             for partialMatch in value.consume(s, state):
-                extraScore = math.log(p)
+                extraScore = log(p)
                 yield partialMatch._replace(score=partialMatch.score+extraScore, reported_score=partialMatch.reported_score+extraScore)
 
     def map(self, f): return Alt([f(v) for v in self.values], self.ps)
@@ -462,7 +468,7 @@ class KleeneStar(Pregex):
         return self.val.leafNodes()
 
     def consume(self, s, state=None):
-        yield PartialMatch(score=math.log(self.p), reported_score=math.log(self.p), numCharacters=0, continuation=None, state=state)
+        yield PartialMatch(score=log(self.p), reported_score=log(self.p), numCharacters=0, continuation=None, state=state)
         for partialMatch in NonEmpty(self.val).consume(s, state):
             assert(partialMatch.numCharacters > 0)
             # Force matching to be nonempty, to avoid infinite recursion when matching fo?* -> foo
@@ -470,11 +476,11 @@ class KleeneStar(Pregex):
             # probability q=P(o?->ε), then multiply all partialmatches by 1/[1-q(1-p))]. (TODO)
 
             if partialMatch.continuation is None:
-                continuation = KleeneStar(self.val)
+                continuation = self
             else:
-                continuation = Concat((partialMatch.continuation, KleeneStar(self.val)))
+                continuation = Concat((partialMatch.continuation, self))
 
-            extraScore = math.log(1-self.p) 
+            extraScore = log(1-self.p) 
             yield partialMatch._replace(score=partialMatch.score+extraScore, reported_score=partialMatch.reported_score+extraScore, continuation=continuation)
 
     def map(self, f): return KleeneStar(f(self.val), self.p)
@@ -521,9 +527,9 @@ class Plus(Pregex):
     def consume(self, s, state=None):
         for partialMatch in self.val.consume(s, state):
             if partialMatch.continuation is None:
-                continuation = KleeneStar(self.val)
+                continuation = KleeneStar(self.val, self.p)
             else:
-                continuation = Concat((partialMatch.continuation, KleeneStar(self.val)))
+                continuation = Concat((partialMatch.continuation, KleeneStar(self.val, self.p)))
 
             yield partialMatch._replace(continuation=continuation)    
 
@@ -571,9 +577,9 @@ class Maybe(Pregex):
         return self.val.leafNodes()
 
     def consume(self, s, state=None):
-        yield PartialMatch(score=math.log(1-self.p), reported_score=math.log(1-self.p), numCharacters=0, continuation=None, state=state)
+        yield PartialMatch(score=log(1-self.p), reported_score=log(1-self.p), numCharacters=0, continuation=None, state=state)
         for partialMatch in self.val.consume(s, state):
-            extraScore = math.log(self.p)
+            extraScore = log(self.p)
             yield partialMatch._replace(score=partialMatch.score+extraScore, reported_score=partialMatch.reported_score+extraScore)
 
     def map(self, f): return Maybe(f(self.val), self.p)
