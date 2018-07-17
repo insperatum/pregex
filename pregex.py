@@ -80,6 +80,12 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
         """
         raise NotImplementedError()
 
+    def walk(self, depth=0):
+        """
+        walks through the nodes
+        """
+        raise NotImplementedError()
+
 # Viterbi-style
 #
 #    def match(self, string, state=None, mergeState=True, returnPartials=False):
@@ -242,6 +248,13 @@ class CharacterClass(Pregex):
 
     def map(self, f): return self
 
+    def walk(self, depth=0):
+        """
+        walks through the nodes
+        """
+        yield self, depth
+
+
 #Uniform Frequences
 dot = CharacterClass(printable, name=".") #Don't match newline characters
 d = CharacterClass(digits, name="\\d")
@@ -270,6 +283,13 @@ class Named(Pregex):
     def flatten(self, char_map={}, escape_strings=False): return [self.arg[0]]
     def map(self, f): return Named(self.arg[0], f(self.arg[1]))
 
+    def walk(self, depth=0):
+        """
+        walks through the nodes
+        """
+        yield self, depth
+        yield from self.arg[1].walk(depth+1)
+
 class String(Pregex):
     def flatten(self, char_map={}, escape_strings=False):
         if escape_strings:
@@ -285,6 +305,12 @@ class String(Pregex):
             yield PartialMatch(numCharacters=len(self.arg), score=0, reported_score=0, continuation=None, state=state)
 
     def map(self, f): return self
+
+    def walk(self, depth=0):
+        """
+        walks through the nodes
+        """
+        yield self, depth
 
 class Concat(Pregex):
     def __new__(cls, values):
@@ -323,6 +349,14 @@ class Concat(Pregex):
             yield partialMatch._replace(continuation=continuation)
 
     def map(self, f): return Concat([f(v) for v in self.values])
+
+    def walk(self, depth=0):
+        """
+        walks through the nodes
+        """
+        yield self, depth
+        for v in self.values:
+            yield from v.walk(depth+1)
 
 class Alt(Pregex):
     def __new__(cls, values, ps=None):
@@ -371,6 +405,14 @@ class Alt(Pregex):
                 yield partialMatch._replace(score=partialMatch.score+extraScore, reported_score=partialMatch.reported_score+extraScore)
 
     def map(self, f): return Alt([f(v) for v in self.values], self.ps)
+
+    def walk(self, depth=0):
+        """
+        walks through the nodes
+        """
+        yield self, depth
+        for v in self.values:
+            yield from v.walk(depth+1)
 
 class NonEmpty(Pregex):
     """
@@ -437,6 +479,13 @@ class KleeneStar(Pregex):
 
     def map(self, f): return KleeneStar(f(self.val), self.p)
 
+    def walk(self, depth=0):
+        """
+        walks through the nodes
+        """
+        yield self, depth
+        yield from self.val.walk(depth+1)
+
 
 class Plus(Pregex):
     def __new__(cls, arg, p=0.5):
@@ -480,6 +529,13 @@ class Plus(Pregex):
 
     def map(self, f): return Plus(f(self.val), self.p)
 
+    def walk(self, depth=0):
+        """
+        walks through the nodes
+        """
+        yield self, depth
+        yield from self.val.walk(depth+1)
+
 
 class Maybe(Pregex):
     def __new__(cls, arg, p=0.5):
@@ -521,6 +577,13 @@ class Maybe(Pregex):
             yield partialMatch._replace(score=partialMatch.score+extraScore, reported_score=partialMatch.reported_score+extraScore)
 
     def map(self, f): return Maybe(f(self.val), self.p)
+
+    def walk(self, depth=0):
+        """
+        walks through the nodes
+        """
+        yield self, depth
+        yield from self.val.walk(depth+1)
 
 
 # ------------------------------------
