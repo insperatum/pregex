@@ -612,7 +612,7 @@ def create(seq, lookup=None, natural_frequencies=False):
     def head(x):
         if type(seq) is str:
             return {"*":KleeneStar, "+":Plus, "?":Maybe, "|":Alt, "(":OPEN, ")":CLOSE}.get(x[0], x[0])
-        elif type(seq) is list:
+        elif type(seq) is list or type(seq) is tuple:
             return x[0]
 
     def precedence(x):
