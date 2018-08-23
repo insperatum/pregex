@@ -286,7 +286,7 @@ class CharacterClass(Pregex):
     def sample(self, state=None):
         state, return_state = defaultState(state)
         ps = ngram_lookup(self.ps, state)
-        if torch and torch.is_tensor(ps): ps=ps.detach().numpy()
+        if torch and torch.is_tensor(ps): ps=ps.detach().cpu().numpy()
         v = np.random.choice(self.values, p=ps)
         if return_state: return v, state._replace(context=state.context+v) 
         else: return v
