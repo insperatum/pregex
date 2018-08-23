@@ -4,6 +4,7 @@ from __future__ import division, print_function
 from collections import namedtuple, Counter
 try: from queue import PriorityQueue
 except ImportError: from Queue import PriorityQueue
+import types
 
 import random
 import math
@@ -701,22 +702,28 @@ def create(seq, lookup=None, natural_frequencies=False):
     """
     Seq is a string or a list
     """
-    def head(x):
+    def headtail(x):
         if type(seq) is str:
-            return {"*":KleeneStar, "+":Plus, "?":Maybe, "|":Alt, "(":OPEN, ")":CLOSE}.get(x[0], x[0])
+            if lookup is not None:
+                for k,v in lookup.items():
+                    if x[:len(k)] == k and type(v) is types.LambdaType: return v, x[len(k):]
+            return {"*":KleeneStar, "+":Plus, "?":Maybe, "|":Alt, "(":OPEN, ")":CLOSE}.get(x[0], x[0]), x[1:] 
         elif type(seq) is list or type(seq) is tuple:
-            return x[0]
+            return x[0], x[1:]
 
     def precedence(x):
+        if type(x) is types.LambdaType: return 2
         return {KleeneStar:2, Plus:2, Maybe:2, Alt:1, OPEN:0, CLOSE:-1}.get(x, 0)
 
     def parseToken(seq):
         if len(seq) == 0: raise ParseException()
 
-        if lookup is not None and seq[0] in lookup:
-            return lookup[seq[0]], seq[1:]
+        if lookup is not None:
+            for k,v in lookup.items():
+                if seq[:len(k)] == k and isinstance(v, Pregex):
+                    return v, seq[len(k):]
 
-        elif issubclass(type(seq[0]), Pregex):
+        if isinstance(seq[0], Pregex):
             return seq[0], seq[1:]
 
         elif type(seq) is str and (seq[:2] in ("\\*", "\\+", "\\?", "\\|", "\\(", "\\)", "\\.", "\\\\", "\\d", "\\s", "\\w", "\\l", "\\u") or seq[:1] == "."):
@@ -736,17 +743,20 @@ def create(seq, lookup=None, natural_frequencies=False):
             elif seq[:2] == "\\u": return u_natural if natural_frequencies else u, seq[2:]
             elif seq[:1] == ".":  return dot_natural if natural_frequencies else dot, seq[1:]
 
-        elif head(seq) == OPEN:
+        else:
+            h, t = headtail(seq)
+            if h == OPEN:
+                assert len(t) == len(seq)-1
                 if len(seq)<=1: raise ParseException() #Lookahead
                 inner_lhs, inner_remainder = parseToken(seq[1:])
                 rhs, seq = parse(inner_lhs, inner_remainder, -1, True)
                 return rhs, seq[1:]
 
-        elif type(seq[0]) is str and seq[0] in printable:
-            return String(seq[0]), seq[1:]
+            elif type(seq[0]) is str and seq[0] in printable:
+                return String(seq[0]), seq[1:]
 
-        else:
-            raise ParseException()
+            else:
+                raise ParseException()
 
     def parse(lhs, remainder, min_precedence=0, inside_brackets=False):
         if not remainder:
@@ -754,18 +764,22 @@ def create(seq, lookup=None, natural_frequencies=False):
             return lhs, remainder
 
         else:
-            if precedence(head(remainder)) < min_precedence:
+            h, t = headtail(remainder)
+
+            if precedence(h) < min_precedence:
                 return lhs, remainder
             
-            elif head(remainder) == CLOSE:
+            elif h == CLOSE:
                 if not inside_brackets: raise ParseException()
                 return lhs, remainder
 
-            elif head(remainder) not in (KleeneStar, Plus, Maybe, Alt): #Atom
+            elif h not in (KleeneStar, Plus, Maybe, Alt) and type(h) is not types.LambdaType: #Atom
                 rhs, remainder = parseToken(remainder)
+                if remainder: h, t = headtail(remainder)
 
-                while remainder and head(remainder) != CLOSE:
+                while remainder and h != CLOSE:
                     rhs, remainder = parse(rhs, remainder, 0, inside_brackets)
+                    if remainder: h, t = headtail(remainder)
 
                 if type(lhs) is String and type(rhs) is String:
                     return String(lhs.arg + rhs.arg), remainder
@@ -777,17 +791,19 @@ def create(seq, lookup=None, natural_frequencies=False):
                     return Concat([lhs, rhs]), remainder
 
             else:
-                op, remainder = head(remainder), remainder[1:]
-                if op in (KleeneStar, Plus, Maybe): 
+                op, remainder = h, t
+                if op in (KleeneStar, Plus, Maybe) or type(op) is types.LambdaType: 
                     #Don't need to look right
                     lhs = op(lhs)
                     return parse(lhs, remainder, min_precedence, inside_brackets)
                 elif op == Alt:
                     #Need to look right
                     rhs, remainder = parseToken(remainder)
+                    if remainder: h, t = headtail(remainder)
 
-                    while remainder and precedence(head(remainder)) >= precedence(op):
+                    while remainder and precedence(h) >= precedence(op):
                         rhs, remainder = parse(rhs, remainder, precedence(op), inside_brackets)
+                        if remainder: h, t = headtail(remainder)
 
                     if type(rhs) is Alt:
                         lhs = Alt((lhs,) + rhs.values)

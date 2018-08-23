@@ -2,9 +2,12 @@
 import pregex as pre
 #import math
 
+
+
 assert(pre.create("f(a|o)*") == pre.Concat([pre.String("f"), pre.KleeneStar(pre.Alt([pre.String("a"), pre.String("o")]))]))
 assert(pre.create("fa|o*") == pre.Concat([pre.String("f"), pre.Alt([pre.String("a"), pre.KleeneStar(pre.String("o"))])]))
 assert(pre.create("(f.*)+") == pre.Plus(pre.Concat([pre.String("f"), pre.KleeneStar(pre.dot)])))
+assert(pre.create("a*foo&&", {"foo":pre.create("A"), "&&":lambda r:pre.KleeneStar(r)}) == pre.create("a*A*"))
 
 test_cases = [
 	("foo", "fo", False),
