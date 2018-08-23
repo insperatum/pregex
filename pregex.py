@@ -720,8 +720,10 @@ def create(seq, lookup=None, natural_frequencies=False):
 
         if lookup is not None:
             for k,v in lookup.items():
-                if seq[:len(k)] == k and isinstance(v, Pregex):
+                if type(seq) is str and seq[:len(k)] == k and isinstance(v, Pregex):
                     return v, seq[len(k):]
+                elif type(seq) is not str and seq[0] == k and isinstance(v, Pregex):
+                    return v, seq[1:]
 
         if isinstance(seq[0], Pregex):
             return seq[0], seq[1:]
