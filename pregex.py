@@ -246,12 +246,11 @@ class CharacterClass(Pregex):
                 if type(ps) is dict:
                     return NGramLookup({k:process(v) for k,v in ps.items()})
                 else:
-                    assert len(ps) == len(values)
                     if normalised:
                         if type(ps) is list: return tuple(ps)
-                        else:
-                            return ps
+                        else: return ps
                     else:
+                        assert len(ps) == len(values)
                         #do normalization
                         if torch and torch.is_tensor(ps): return ps / ps.sum()
                         else: return tuple(p/sum(ps) for p in ps)
