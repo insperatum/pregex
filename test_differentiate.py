@@ -4,33 +4,46 @@ from torch.nn import Parameter
 import torch.nn.functional as F
 from torch import optim
 import string
-from collections import Counter
+#from collections import Counter
 
-s = "hello"
-a = string.ascii_lowercase
+print_every=25
+names = ["Luke Hewitt", "Max Nye", "Kevin Ellis", "Josh Rule", "Josh Tenenbaum"]
 
-t_l = Parameter(torch.zeros(len(a)))
-t_p = Parameter(torch.zeros(1))
+for mode in ["unigram", "bigram", "trigram"]:
+    print("\n------" + mode + "------")
+    a = string.ascii_lowercase + string.ascii_uppercase + " "
 
-optimiser = optim.Adam([t_l, t_p])
+    if mode=="unigram":
+        keys = [""]
+    elif mode=="bigram":
+        keys = [""] + list(a)
+    elif mode=="trigram":
+        keys = [""] + list(a) + [a1 + a2 for a1 in a for a2 in a]
+    
+    t_l = Parameter(torch.zeros(len(keys), len(a)))
+    t_p = Parameter(torch.zeros(len(keys)))
 
-for i in range(5001):
-    optimiser.zero_grad()
-    ps = F.softmax(t_l, dim=0)
-    p = F.sigmoid(t_p)
+    optimiser = optim.Adam([t_l, t_p], lr=0.1)
 
-    l = pre.CharacterClass(string.ascii_lowercase, name="\\l", normalised_ps=ps)
-    r = pre.KleeneStar(l, p=p)
-    score = r.match("hello")
-    (-score).backward(retain_graph=True)
-    optimiser.step()
-    if i%1000 == 0:
-        print("\nIteration:", i)
-        print("p:", p)
-        print("Probs:", list(zip(a, ps.tolist())))
-        print("Score:", score)
+    for i in range(501):
+        optimiser.zero_grad()
+        ps_tens = F.softmax(t_l, dim=1)
+        p_tens = F.sigmoid(t_p)
+        ps = {k:v for k,v in zip(keys, ps_tens)}
+        p = {k:v for k,v in zip(keys, p_tens)}
 
-c = Counter(s)
-for i,x in enumerate(a):
-    assert((ps[i] - (c[x] / len(c))) < 0.01)
-assert((p-1/(len(s)+1)).abs() < 0.01)
+        l = pre.CharacterClass(a, name="alphanumeric", ps=ps, normalised=True)
+        word = pre.Plus(l, p=p)
+        r = pre.create("w w", lookup={"w":word})
+        score = sum(r.match(name) for name in names)
+        (-score).backward(retain_graph=True)
+        optimiser.step()
+
+        if i%print_every == 0:
+            print("Iteration %3d | Score %7.2f | %s" %(i, score.item(), r.sample()))
+
+
+    #c = Counter(s)
+    #for i,x in enumerate(a):
+    #    assert((ps[i] - (c[x] / len(c))) < 0.01)
+    #assert((p-1/(len(s)+1)).abs() < 0.01)

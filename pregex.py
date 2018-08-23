@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from __future__ import division, print_function
-from scipy.stats import geom
 from collections import namedtuple, Counter
 try: from queue import PriorityQueue
 except ImportError: from Queue import PriorityQueue
@@ -22,6 +21,11 @@ PartialMatch = namedtuple("PartialMatch", ["numCharacters", "score", "reported_s
 
 OPEN = "BRACKET_OPEN"
 CLOSE = "BRACKET_CLOSE"
+
+State = namedtuple("State", ['context'])
+def defaultState(v):
+    if v is None: return State(""), False
+    else: return v, True
 
 class Pregex(namedtuple("Pregex", ["type", "arg"])):
     def __new__(cls, arg):
@@ -59,16 +63,21 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
 
     def sample(self, state=None):
         """
-        Returns a sample
+        Returns a sample (if state is defaultState)
+        or (sample, state) otherwise
+
+        Must update state.context
         """
         raise NotImplementedError()
 
-    def consume(self, s, state=None):
+    def consume(self, s, state):
         """
         :param s str:
         Consume some of s
         Yield the score, the number of tokens consumed, the remainder of the regex, and the final state
         Returns generator(PartialMatch)
+
+        Doesnt update state.context
         """
         raise NotImplementedError()
 
@@ -92,6 +101,7 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
 
 # Viterbi-style
 #
+#   """ note: this doesn't update state context!"""
 #    def match(self, string, state=None, mergeState=True, returnPartials=False):
 #        """
 #        :param bool mergeState: if True, only retain the highest scoring state for each continuation 
@@ -150,27 +160,23 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
 
 # Dijkstra-style
 
-    def match(self, string, state=None, mergeState=True, returnPartials=False):
-        """
-        :param bool mergeState: if True, only retain the highest scoring state for each continuation 
-        """
-        initialState = state
-        #partialsAt = [[] for i in range(len(string)+1)]
-        #finalMatches = [[] for i in range(len(string)+1)]
+    def match(self, string, state=None, returnPartials=False):
+        state, return_state = defaultState(state)
         Node = namedtuple("Node", ("numCharacters", "continuation", "state"))
         start = PartialMatch(0, 0, 0, self, state)
         visited = {Node(0, self, state)} 
         queue = PriorityQueue()
-        queue.put((0, start)) #Priority 0
+        queue.put(((0,0), start)) #Priority 0
         
         solution = None
         while not queue.empty() and solution is None:
             priority, current = queue.get()
             remainder = string[current.numCharacters:]
             for remainderMatch in current.continuation.consume(remainder, current.state):
-                assert not (remainderMatch.numCharacters==0 and current.continuation==remainderMatch.continuation and current.state==remainderMatch.state)
+                #assert not (remainderMatch.numCharacters==0 and current.continuation==remainderMatch.continuation and current.state==remainderMatch.state)
                 numCharacters = current.numCharacters + remainderMatch.numCharacters
-                newNode = Node(numCharacters, remainderMatch.continuation, remainderMatch.state)
+                newState = remainderMatch.state._replace(context=string[:numCharacters])
+                newNode = Node(numCharacters, remainderMatch.continuation, newState)
                 if newNode not in visited:
                     visited.add(newNode)
                     newMatch = PartialMatch(
@@ -178,13 +184,13 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
                         current.score + remainderMatch.score,
                         current.reported_score + remainderMatch.reported_score,
                         remainderMatch.continuation,
-                        remainderMatch.state)
+                        newState)
                     if newMatch.continuation is None:
                         if newMatch.numCharacters == len(string):
                             solution = newMatch
                             break
                     else:
-                        queue.put((-remainderMatch.score, newMatch))
+                        queue.put(((-remainderMatch.score, random.random()), newMatch))
 
         def getOutput(match):
             if match is not None:
@@ -194,10 +200,8 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
                 state = None
                 reported_score = float("-inf")
 
-            if initialState is None:
-                return reported_score
-            else:
-                return reported_score, state
+            if return_state: return reported_score, state
+            else: return reported_score
 
         if returnPartials:
             raise NotImplementedError
@@ -205,23 +209,56 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
         else:
             return getOutput(solution)
 
+#def as_identifier(s):
+#    if s.isidentifier(): return s
+#    else: return "ord%d" % ord(s)
+
+def ngram_lookup(vals, state):
+    if type(vals) is NGramLookup:
+        return vals.get(state.context)
+    else:
+        return vals
+
+class NGramLookup():
+    def __init__(self, dict, max_length=None):
+        if max_length is None: max_length = max(len(x) for x in dict.keys())
+        self.max_length = max_length
+        self.dict = dict
+        self.id = random.randint(0, 1e10)
+        
+    def __hash__(self): return self.id
+
+    def get(self, context):
+        for i in range(len(context)-self.max_length, len(context)+1):
+            s = context[i:]
+            if s in self.dict: return self.dict[s]
+
 class CharacterClass(Pregex):
-    def __new__(cls, values, ps=None, name=None, normalised_ps=None):
-        if normalised_ps is None:
-            if ps is None:
-                ps = [1/len(values) for value in values]
-            else:
-                #do normalization
-                assert len(ps) == len(values)
-                if torch and torch.is_tensor(ps): ps = ps / ps.sum()
-                else: ps = [p/sum(ps) for p in ps]
+    """
+    ps can be a list, or a recursive dict to describe the context
+    """
+    def __new__(cls, values, ps=None, name=None, normalised=False):
+        if ps is None:
+            ps = tuple(1/len(values) for value in values)
         else:
-            ps = normalised_ps
-        if type(ps) is list: ps = tuple(ps)
+            def process(ps):
+                if type(ps) is dict:
+                    return NGramLookup({k:process(v) for k,v in ps.items()})
+                else:
+                    assert len(ps) == len(values)
+                    if normalised:
+                        if type(ps) is list: return tuple(ps)
+                        else:
+                            return ps
+                    else:
+                        #do normalization
+                        if torch and torch.is_tensor(ps): return ps / ps.sum()
+                        else: return tuple(p/sum(ps) for p in ps)
+            ps = process(ps)
         return super(CharacterClass, cls).__new__(cls, (tuple(values), ps, name))
 
     def __getnewargs__(self):
-        return (self.values, None, self.name, self.ps)
+        return (self.values, self.ps, self.name, True)
 
     @property
     def values(self):
@@ -244,12 +281,19 @@ class CharacterClass(Pregex):
     def flatten(self, char_map={}, escape_strings=False):
         return [char_map.get(self, self)]
 
-    def sample(self, state=None):
-        return np.random.choice(self.values, p=self.ps)
 
-    def consume(self, s, state=None):
+    def sample(self, state=None):
+        state, return_state = defaultState(state)
+        ps = ngram_lookup(self.ps, state)
+        if torch and torch.is_tensor(ps): ps=ps.detach().numpy()
+        v = np.random.choice(self.values, p=ps)
+        if return_state: return v, state._replace(context=state.context+v) 
+        else: return v
+
+    def consume(self, s, state):
         if len(s)>=1 and s[:1] in self.values:
-            score = log(self.ps[self.values.index(s[:1])])
+            ps = ngram_lookup(self.ps, state)
+            score = log(ps[self.values.index(s[:1])])
             yield PartialMatch(numCharacters=1, score=score, reported_score=score, continuation=None, state=state)
 
     def map(self, f): return self
@@ -284,7 +328,7 @@ u_natural = CharacterClass(ascii_uppercase, name="\\u", ps=_natural_probs(ascii_
 class Named(Pregex):
     def __new__(cls, name, value): return super(Named, cls).__new__(cls, (name, value))
     def sample(self, state=None): return self.arg[1].sample(state)
-    def consume(self, s, state=None): return self.arg[1].consume(s, state)
+    def consume(self, s, state): return self.arg[1].consume(s, state)
     def leafNodes(self): return self.arg[1].leafNodes()
     def flatten(self, char_map={}, escape_strings=False): return [self.arg[0]]
     def map(self, f): return Named(self.arg[0], f(self.arg[1]))
@@ -304,9 +348,11 @@ class String(Pregex):
             return list(self.arg)
         
     def sample(self, state=None):
-        return self.arg
+        state, return_state = defaultState(state)
+        if return_state: return self.arg, state._replace(context=state.context+self.arg)
+        else: return self.arg
 
-    def consume(self, s, state=None):
+    def consume(self, s, state):
         if s[:len(self.arg)]==self.arg:
             yield PartialMatch(numCharacters=len(self.arg), score=0, reported_score=0, continuation=None, state=state)
 
@@ -333,12 +379,19 @@ class Concat(Pregex):
         return sum([flatten(x, char_map, escape_strings) for x in self.values], [])
 
     def sample(self, state=None):
-        return "".join(value.sample(state) for value in self.values)
+        state, return_state = defaultState(state)
+        v = ""
+        for value in self.values:
+            samp, state = value.sample(state)
+            v += samp
+
+        if return_state: return v, state
+        else: return v
 
     def leafNodes(self):
         return [x for child in self.values for x in child.leafNodes()]
 
-    def consume(self, s, state=None):
+    def consume(self, s, state):
         for partialMatch in self.values[0].consume(s, state):
             if partialMatch.continuation is None:
                 if len(self.values)==1:
@@ -395,16 +448,20 @@ class Alt(Pregex):
         return out
 
     def sample(self, state=None):
+        state, return_state = defaultState(state)
         values = np.empty((len(self.values,)), dtype=object)
         for i in range(len(self.values)): values[i] = self.values[i] #Required so that numpy doesn't make a 2d array (because namedtuple is iterable :/ ...)
 
         value = np.random.choice(values, p=self.ps)
-        return value.sample(state)
+        v, state = value.sample(state)
+        
+        if return_state: return v, state
+        else: return v
 
     def leafNodes(self):
         return [x for child in self.values for x in child.leafNodes()]
 
-    def consume(self, s, state=None):
+    def consume(self, s, state):
         for p, value in zip(self.ps, self.values):
             for partialMatch in value.consume(s, state):
                 extraScore = log(p)
@@ -420,24 +477,30 @@ class Alt(Pregex):
         for v in self.values:
             yield from v.walk(depth+1)
 
-class NonEmpty(Pregex):
-    """
-    (Used in KleeneStar.match)
-    """
-    def consume(self, s, state=None):
-        stack = [PartialMatch(numCharacters=0, score=0, reported_score=0, continuation=self.arg, state=state)]
-        while stack:
-            p = stack.pop()
-            if p.continuation is not None:
-                for p2 in p.continuation.consume(s[p.numCharacters:], p.state):
-                    partialMatch = p2._replace(score=p.score+p2.score, reported_score=p.reported_score+p2.reported_score)
-                    if partialMatch.numCharacters>0:
-                        yield partialMatch
-                    else:
-                        stack.append(partialMatch)
+#class NonEmpty(Pregex):
+#    """
+#    (Used in KleeneStar.match)
+#    """
+#    def consume(self, s, state):
+#        stack = [PartialMatch(numCharacters=0, score=0, reported_score=0, continuation=self.arg, state=state)]
+#        while stack:
+#            p = stack.pop()
+#            if p.continuation is not None:
+#                for p2 in p.continuation.consume(s[p.numCharacters:], p.state):
+#                    partialMatch = p2._replace(score=p.score+p2.score, reported_score=p.reported_score+p2.reported_score)
+#                    if partialMatch.numCharacters>0:
+#                        yield partialMatch
+#                    else:
+#                        stack.append(partialMatch)
 
 class KleeneStar(Pregex):
     def __new__(cls, arg, p=0.5):
+        def process(ps):
+            if type(ps) is dict:
+                return NGramLookup(ps)
+            else:
+                return ps
+        p = process(p)
         return super(KleeneStar, cls).__new__(cls, (p, arg))
 
     def __getnewargs__(self):
@@ -461,26 +524,40 @@ class KleeneStar(Pregex):
             return flatten(self.val, char_map, escape_strings) + [char_map.get(type(self), type(self))]
             
     def sample(self, state=None):
-        n = geom.rvs(self.p, loc=-1)
-        return "".join(self.val.sample(state) for i in range(n))
+        state, return_state = defaultState(state)
+        v = ""
+        while True:
+            p = ngram_lookup(self.p, state)
+            if torch and torch.is_tensor(p): p = p.item()
+            if random.random()<p: break    
+            samp, state = self.val.sample(state) 
+            v += samp
+        
+        if return_state: return v, state
+        else: return v
 
     def leafNodes(self):
         return self.val.leafNodes()
 
-    def consume(self, s, state=None):
-        yield PartialMatch(score=log(self.p), reported_score=log(self.p), numCharacters=0, continuation=None, state=state)
-        for partialMatch in NonEmpty(self.val).consume(s, state):
-            assert(partialMatch.numCharacters > 0)
-            # Force matching to be nonempty, to avoid infinite recursion when matching fo?* -> foo
-            # This is only valid for MAP. If we want to get the marginal, we should first calculate 
-            # probability q=P(o?->ε), then multiply all partialmatches by 1/[1-q(1-p))]. (TODO)
-
+    def consume(self, s, state):
+        p = ngram_lookup(self.p, state)
+        yield PartialMatch(score=log(p), reported_score=log(p), numCharacters=0, continuation=None, state=state)
+        
+        # Note: Previously this was used to avoid infinite recursion, under the assumption that p does not change
+        # It is now unneccessary, as match uses dijkstra's algorithm, and also no longer valid, as p can change based on context
+        #
+        ## for partialMatch in NonEmpty(self.val).consume(s, state):
+        ##    assert(partialMatch.numCharacters > 0)
+        ##    # Force matching to be nonempty, to avoid infinite recursion when matching fo?* -> foo
+        ##    # This is only valid for MAP. If we want to get the marginal, we should first calculate 
+        ##    # probability q=P(o?->ε), then multiply all partialmatches by 1/[1-q(1-p))]. (TODO)
+        for partialMatch in self.val.consume(s, state):
             if partialMatch.continuation is None:
                 continuation = self
             else:
                 continuation = Concat((partialMatch.continuation, self))
 
-            extraScore = log(1-self.p) 
+            extraScore = log(1-p) 
             yield partialMatch._replace(score=partialMatch.score+extraScore, reported_score=partialMatch.reported_score+extraScore, continuation=continuation)
 
     def map(self, f): return KleeneStar(f(self.val), self.p)
@@ -495,6 +572,12 @@ class KleeneStar(Pregex):
 
 class Plus(Pregex):
     def __new__(cls, arg, p=0.5):
+        def process(ps):
+            if type(ps) is dict:
+                return NGramLookup(ps)
+            else:
+                return ps
+        p = process(p)
         return super(Plus, cls).__new__(cls, (p, arg))
 
     def __getnewargs__(self):
@@ -518,13 +601,18 @@ class Plus(Pregex):
             return flatten(self.val, char_map, escape_strings) + [char_map.get(type(self), type(self))]
 
     def sample(self, state=None):
-        n = geom.rvs(self.p, loc=0)
-        return "".join(self.val.sample(state) for i in range(n))    
+        state, return_state = defaultState(state)
+        samp, state = self.val.sample(state)
+        samp2, state = KleeneStar(self.val, self.p).sample(state)
+        v = samp + samp2
+
+        if return_state: return v, state
+        else: return v
 
     def leafNodes(self):
         return self.val.leafNodes()
 
-    def consume(self, s, state=None):
+    def consume(self, s, state):
         for partialMatch in self.val.consume(s, state):
             if partialMatch.continuation is None:
                 continuation = KleeneStar(self.val, self.p)
@@ -568,15 +656,19 @@ class Maybe(Pregex):
             return flatten(self.val, char_map, escape_strings) + [char_map.get(type(self), type(self))]
 
     def sample(self, state=None):
+        state, return_state = defaultState(state)
         if random.random() < self.p:
-            return self.val.sample(state)
+            v, state = self.val.sample(state)
         else:
-            return ""
+            v = ""
+
+        if return_state: return v,state
+        else: return v
 
     def leafNodes(self):
         return self.val.leafNodes()
 
-    def consume(self, s, state=None):
+    def consume(self, s, state):
         yield PartialMatch(score=log(1-self.p), reported_score=log(1-self.p), numCharacters=0, continuation=None, state=state)
         for partialMatch in self.val.consume(s, state):
             extraScore = log(self.p)
@@ -714,19 +806,22 @@ def create(seq, lookup=None, natural_frequencies=False):
 # ------------------------------------------------------------------------------------------------
 class Wrapper(Pregex):
     """
-    :param state->value arg.sample: 
+    :param state->value,state arg.sample: 
     :param string,state->score,state arg.match:
     """
     def __repr__(self):
         return "(" + type(self.arg).__name__ + ")"
 
     def sample(self, state=None):
-        return self.arg.sample(state)
+        state, return_state = defaultState(state)
+        v, state = self.arg.sample(state)
 
-    def consume(self, s, state=None):
+        if return_state: return v, state
+        else: return v
+
+    def consume(self, s, state):
         for i in range(len(s)+1):
             matchScore, newState = self.arg.match(s[:i], state)
             if matchScore > float("-inf"):
                 yield PartialMatch(numCharacters=i, score=matchScore, reported_score=matchScore, continuation=None, state=newState)
-
 
