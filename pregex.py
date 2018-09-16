@@ -761,6 +761,7 @@ def create(seq, lookup=None, natural_frequencies=False):
 
     def parse(lhs, remainder, min_precedence=0, inside_brackets=False):
         if not remainder:
+            print("lhs", lhs, "remainder", remainder, "inside_brackets", inside_brackets)
             if inside_brackets: raise ParseException()
             return lhs, remainder
 
@@ -778,7 +779,9 @@ def create(seq, lookup=None, natural_frequencies=False):
                 rhs, remainder = parseToken(remainder)
                 if remainder: h, t = headtail(remainder)
 
-                while remainder and h != CLOSE:
+#                while remainder and h != CLOSE:
+                while (inside_brackets and h != CLOSE) or (not inside_brackets and remainder):
+                    if inside_brackets and not remainder: raise ParseException()
                     rhs, remainder = parse(rhs, remainder, 0, inside_brackets)
                     if remainder: h, t = headtail(remainder)
 

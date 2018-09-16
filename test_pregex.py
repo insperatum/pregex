@@ -38,6 +38,12 @@ for (string, regex, matches) in test_cases:
 	print("Matching", string, r)
 	assert(matches == (r.match(string)>float("-inf")))
 
+print("Testing unfinished brackets")
+try:
+    r = pre.create("(foo")
+    assert(false)
+except pre.ParseException: pass
+
 print("Testing natural frequencies")
 print("hello")
 assert(pre.create("\l*", natural_frequencies=True).match("hello") > pre.create("\l*").match("hello"))
