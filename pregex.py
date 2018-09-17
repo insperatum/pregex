@@ -761,7 +761,6 @@ def create(seq, lookup=None, natural_frequencies=False):
 
     def parse(lhs, remainder, min_precedence=0, inside_brackets=False):
         if not remainder:
-            print("lhs", lhs, "remainder", remainder, "inside_brackets", inside_brackets)
             if inside_brackets: raise ParseException()
             return lhs, remainder
 
