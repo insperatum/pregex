@@ -8,6 +8,7 @@ import types
 
 import random
 import math
+torch=None
 try: import torch
 except ImportError: pass
 def log(x): return x.log() if torch and torch.is_tensor(x) else math.log(x)
@@ -781,6 +782,7 @@ def create(seq, lookup=None, natural_frequencies=False):
 #                while remainder and h != CLOSE:
                 while (inside_brackets and h != CLOSE) or (not inside_brackets and remainder):
                     if inside_brackets and not remainder: raise ParseException()
+                    if not inside_brackets and h == CLOSE: raise ParseException()
                     rhs, remainder = parse(rhs, remainder, 0, inside_brackets)
                     if remainder: h, t = headtail(remainder)
 
