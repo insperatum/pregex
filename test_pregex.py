@@ -33,12 +33,20 @@ test_cases = [
 	("123abcABC ", "\\d+\\l+\\u+\\s", True)
 ]
 for (string, regex, matches) in test_cases:
-	print("Parsing", regex)
+	print("\nParsing", regex)
 	r = pre.create(regex)
 	print("Matching", string, r)
 	assert(matches == (r.match(string)>float("-inf")))
 
-print("Testing brackets")
+def matchFirst(left, right, string): #left|right should match string through the left path
+    s1 = pre.Alt([left, right]).match(string) 
+    s2 = pre.Alt([left, pre.String("")]).match(string)
+    print("\nTesting", string, "on", str(left), "vs", str(right))
+    assert(s1==s2) 
+matchFirst(pre.create("." + "0"*99), pre.create("\d"*100), "0"*100)
+matchFirst(pre.create("(a|b)0"), pre.create("a."), "a0")
+
+print("\nTesting brackets")
 try:
     r = pre.create("(foo")
     assert(False)

@@ -166,33 +166,35 @@ class Pregex(namedtuple("Pregex", ["type", "arg"])):
         state, return_state = defaultState(state)
         Node = namedtuple("Node", ("numCharacters", "continuation", "state"))
         start = PartialMatch(0, 0, 0, self, state)
-        visited = {Node(0, self, state)} 
+        visited_score = {Node(0, self, state):0}
         queue = PriorityQueue()
         queue.put(((0,0), start)) #Priority 0
         
         solution = None
         while not queue.empty() and solution is None:
             priority, current = queue.get()
+            if current.continuation is None:
+                if current.numCharacters == len(string):
+                    solution = current
+                    break
+                else: continue
             remainder = string[current.numCharacters:]
             for remainderMatch in current.continuation.consume(remainder, current.state):
                 #assert not (remainderMatch.numCharacters==0 and current.continuation==remainderMatch.continuation and current.state==remainderMatch.state)
                 numCharacters = current.numCharacters + remainderMatch.numCharacters
                 newState = remainderMatch.state._replace(context=string[:numCharacters])
                 newNode = Node(numCharacters, remainderMatch.continuation, newState)
-                if newNode not in visited:
-                    visited.add(newNode)
+                newScore = current.score + remainderMatch.score
+                newReportedScore = current.reported_score + remainderMatch.reported_score
+                if newNode not in visited_score or visited_score[newNode]<newReportedScore:
+                    visited_score[newNode] = current.reported_score + remainderMatch.reported_score
                     newMatch = PartialMatch(
                         numCharacters,
-                        current.score + remainderMatch.score,
-                        current.reported_score + remainderMatch.reported_score,
+                        newScore,
+                        newReportedScore,
                         remainderMatch.continuation,
                         newState)
-                    if newMatch.continuation is None:
-                        if newMatch.numCharacters == len(string):
-                            solution = newMatch
-                            break
-                    else:
-                        queue.put(((-remainderMatch.score, random.random()), newMatch))
+                    queue.put(((-newReportedScore, random.random()), newMatch))
 
         def getOutput(match):
             if match is not None:
