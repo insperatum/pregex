@@ -241,7 +241,7 @@ class CharacterClass(Pregex):
     """
     ps can be a list, or a recursive dict to describe the context
     """
-    def __new__(cls, values, ps=None, name=None, normalised=False):
+    def __new__(cls, values, name=None, ps=None, normalised=False):
         if ps is None:
             ps = tuple(1/len(values) for value in values)
         else:
@@ -253,7 +253,7 @@ class CharacterClass(Pregex):
                         if type(ps) is list: return tuple(ps)
                         else: return ps
                     else:
-                        assert len(ps) == len(values)
+                        assert len(ps) == len(values), f"failed, vals {values}, ps: {ps} type ps: {type(ps)}"
                         #do normalization
                         if torch and torch.is_tensor(ps): return ps / ps.sum()
                         else: return tuple(p/sum(ps) for p in ps)
