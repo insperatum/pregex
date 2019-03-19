@@ -258,10 +258,10 @@ class CharacterClass(Pregex):
                         if torch and torch.is_tensor(ps): return ps / ps.sum()
                         else: return tuple(p/sum(ps) for p in ps)
             ps = process(ps)
-        return super(CharacterClass, cls).__new__(cls, (tuple(values), ps, name))
+        return super(CharacterClass, cls).__new__(cls, (tuple(values), name, ps))
 
     def __getnewargs__(self):
-        return (self.values, self.ps, self.name, True)
+        return (self.values, self.name, self.ps, True)
 
     @property
     def values(self):
@@ -269,11 +269,11 @@ class CharacterClass(Pregex):
 
     @property
     def ps(self):
-        return self.arg[1]
+        return self.arg[2]
 
     @property
     def name(self):
-        return self.arg[2]
+        return self.arg[1]
 
     def __repr__(self):
         if self.name is not None:
